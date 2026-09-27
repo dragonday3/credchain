@@ -258,7 +258,7 @@ with the issuing institution, and only their hashes ever reach the contract.
 | Issuer permission errors | `updateCredentialHash` and `revokeCredential` both check the caller against the credential's *stored* issuer, not just "any authorised issuer" — one issuer cannot touch another's credentials (except the admin override on revoke, which is intentional — see §9). |
 | Accidental public mutation | All mutating functions are `external`, none are `public`; all view functions are read-only by the compiler. |
 | Unsafe external calls / reentrancy | The contract makes no external calls and holds no Ether (no `payable` functions), so there is no reentrancy surface. |
-| Integer overflow/underflow | Solidity ≥0.8 reverts on overflow by default; the only arithmetic is `uint64(block.timestamp)`, safe until the year 2554. |
+| Integer overflow/underflow | Solidity ≥0.8 reverts on overflow by default; the only arithmetic is `uint64(block.timestamp)`, which does not overflow until roughly 585 billion years after the Unix epoch. |
 | `tx.origin` | Not used anywhere; all authorisation checks use `msg.sender`. |
 | `block.timestamp` reliance | Used only for informational `issuedAt`/`updatedAt` values, not for access control or randomness — the few seconds of miner discretion over it has no security consequence here. |
 | Unnecessary Ether handling | The contract has no `payable` functions and cannot receive Ether; this is deliberate — it is a notarisation registry, not a treasury, so there's nothing to secure or drain. |
@@ -289,9 +289,11 @@ with the issuing institution, and only their hashes ever reach the contract.
 - An off-chain indexer/subgraph over the emitted events, to give holders and verifiers a
   searchable UI instead of requiring the exact `credentialId`.
 - Batch issuance for institutions onboarding many credentials at once.
-- A holder-side proof mechanism (e.g. holder signs a challenge with the key whose hash matches
-  `holderHash`) so a holder can prove ownership on demand, without ever revealing the
-  underlying identifier used to derive the hash.
+- A holder-side proof mechanism — e.g. the holder discloses the (identifier, salt) preimage to
+  a verifier, who recomputes `keccak256(identifier, salt)` and checks it against the on-chain
+  `holderHash`, or, for full privacy, proves knowledge of that preimage with a zero-knowledge
+  proof — so a holder can prove ownership on demand without the underlying identifier ever
+  being submitted to the contract itself.
 
 ## 18. Assessment Requirement Mapping
 
