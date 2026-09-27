@@ -2,9 +2,10 @@
 
 CredChain lets an authorised educational or professional organisation issue, manage, verify,
 and revoke digital credentials, using a Solidity smart contract as a tamper-evident
-verification layer. This repository covers **Step 2 — Smart Contract Development** of the
-assessment (Option 1, Technical Development Path). **No contract has been deployed to a live
-network yet** — Step 3 (deployment + Etherscan verification) is a separate, later step.
+verification layer. This repository covers **Step 2 — Smart Contract Development** and
+**Step 3 — Deployment and Verification** of the assessment (Option 1, Technical Development
+Path). The contract is deployed and verified on **Ethereum Sepolia** — see §19 for the deployed
+address, transaction evidence, and full reproduction steps.
 
 ## 1. Project overview
 
@@ -309,4 +310,189 @@ with the issuing institution, and only their hashes ever reach the contract.
 | Robust error handling | Every external state-changing function validates its inputs and caller before writing state; zero silent failures | `contracts/CredentialRegistry.sol`, exhaustive negative-path tests |
 
 No test results, compilation output, or deployment claims in this document are fabricated —
-the exact commands to reproduce every number above are given in §11–§13.
+the exact commands to reproduce every number above are given in §11–§13, and the Step 3
+deployment evidence in §19 is all independently verifiable on-chain and on Etherscan.
+
+## 19. Step 3 — Deployment and Verification (Sepolia)
+
+### 19.1 Prerequisites
+
+- Everything in §8, plus:
+- An [Alchemy](https://www.alchemy.com/) account with a Sepolia app (for the RPC URL)
+- A Sepolia-only wallet (never a mainnet/real-funds key) with a small amount of Sepolia test
+  ETH — obtainable from a public faucet (e.g. the Alchemy or Google Cloud Sepolia faucet)
+- An [Etherscan](https://etherscan.io/) account and API key (for source verification)
+
+### 19.2 Environment variables
+
+Same three variables as §14 — `SEPOLIA_RPC_URL`, `PRIVATE_KEY`, `ETHERSCAN_API_KEY` — set in a
+local `.env` (copied from `.env.example`, never committed). `hardhat.config.ts` reads all three
+via `configVariable(...)`, which resolves from `process.env` first.
+
+### 19.3 Alchemy configuration
+
+Create an app in the Alchemy dashboard on the **Sepolia** network and copy its HTTPS URL
+(`https://eth-sepolia.g.alchemy.com/v2/<key>`) into `SEPOLIA_RPC_URL`.
+
+### 19.4 Sepolia wallet setup and ETH requirement
+
+Generate a dedicated wallet for this project (e.g. `new ethers.Wallet(...)` or any wallet
+tool) and fund it with Sepolia test ETH from a faucet. Deployment plus a few post-deployment
+interactions cost well under 0.01 ETH in practice (see §19.6/§19.9 for actual gas figures from
+this deployment) — 0.02–0.05 test ETH is comfortably enough.
+
+### 19.5 Compilation and testing (pre-deployment gate)
+
+```shell
+npx hardhat build --build-profile production
+npx tsc --noEmit
+npx hardhat test
+```
+
+All three must pass before deploying — this project's actual run: **39/39 tests passing**,
+clean typecheck, clean compile with solc `0.8.34` (optimizer enabled, 200 runs — the
+`production` build profile).
+
+> ⚠️ **Build profile consistency**: Hardhat 3's `hardhat-verify` plugin defaults `verify` to the
+> `production` profile, but `hardhat build`/`hardhat run` default to `default` (no optimizer).
+> Running *any* `hardhat run`/`hardhat build` without `--build-profile production` in between
+> your deployment and your verification step will silently recompile and overwrite the local
+> artifacts, causing verification to fail with a bytecode mismatch. Always pass
+> `--build-profile production` explicitly on every command from build through verify. See
+> §19.14 for how this was actually hit and fixed during this deployment.
+
+### 19.6 Deployment command and result
+
+Deployed with Hardhat Ignition (see `ignition/modules/CredentialRegistry.ts`):
+
+```shell
+HARDHAT_IGNITION_CONFIRM_DEPLOYMENT=true npx hardhat ignition deploy \
+  ignition/modules/CredentialRegistry.ts --network sepolia --build-profile production
+```
+
+(`HARDHAT_IGNITION_CONFIRM_DEPLOYMENT` is Ignition's own documented flag for skipping its
+interactive `y/N` confirmation prompt in a non-interactive/CI shell — it does not touch or
+expose any secret.)
+
+| Field | Value |
+| --- | --- |
+| Network | Sepolia (chainId `11155111`) |
+| Contract | `CredentialRegistry` |
+| **Contract address** | [`0x641FF9a8A3D294756F028e6eC42EDAA15E5d96cc`](https://sepolia.etherscan.io/address/0x641FF9a8A3D294756F028e6eC42EDAA15E5d96cc) |
+| **Deployment transaction** | [`0xd165941c59bdf422654cbf17950d858428f675ff463f736c26f4fe89d8b784c4`](https://sepolia.etherscan.io/tx/0xd165941c59bdf422654cbf17950d858428f675ff463f736c26f4fe89d8b784c4) |
+| Deployer / admin address | `0xF571D04625D866248a21ae34f7f048331208fc84` |
+| Block number | `11793137` |
+| Block timestamp | `2026-09-27T11:49:24.000Z` (unix `1790509764`) |
+| Gas used | `763644` |
+| Deployment cost | `≈0.000765 ETH` |
+| Status | `SUCCESS` |
+
+Full deployment records (journal, build-info snapshot, deployed address) are committed under
+`ignition/deployments/chain-11155111/` for reproducibility and audit.
+
+### 19.7 Confirming the deployment on Sepolia Etherscan
+
+- Contract page: <https://sepolia.etherscan.io/address/0x641FF9a8A3D294756F028e6eC42EDAA15E5d96cc>
+- Deployment transaction: <https://sepolia.etherscan.io/tx/0xd165941c59bdf422654cbf17950d858428f675ff463f736c26f4fe89d8b784c4>
+
+Both were confirmed to exist and show `Success` status at the time of writing (19 block
+confirmations checked immediately after deployment).
+
+### 19.8 Source code verification
+
+```shell
+npx hardhat --build-profile production verify --network sepolia \
+  0x641FF9a8A3D294756F028e6eC42EDAA15E5d96cc
+```
+
+This project's `hardhat-verify` plugin (bundled in the ethers+mocha toolbox) verifies against
+**Etherscan**, **Blockscout**, and **Sourcify** in one command — all three succeeded:
+
+- Etherscan: <https://sepolia.etherscan.io/address/0x641FF9a8A3D294756F028e6eC42EDAA15E5d96cc#code>
+- Blockscout: <https://eth-sepolia.blockscout.com/address/0x641FF9a8A3D294756F028e6eC42EDAA15E5d96cc#code>
+- Sourcify: <https://sourcify.dev/server/repo-ui/11155111/0x641FF9a8A3D294756F028e6eC42EDAA15E5d96cc>
+
+No constructor arguments were needed (the constructor takes none — the deployer becomes the
+admin automatically).
+
+**Independently re-checked** via the Etherscan API directly (not just the plugin's own success
+message), confirming genuine verification rather than a false positive:
+
+```shell
+curl "https://api.etherscan.io/v2/api?chainid=11155111&module=contract&action=getsourcecode&address=0x641FF9a8A3D294756F028e6eC42EDAA15E5d96cc&apikey=$ETHERSCAN_API_KEY"
+```
+
+Result: `ContractName: CredentialRegistry`, `CompilerVersion: v0.8.34+commit.80d5c536`,
+`OptimizationUsed: 1`, `Runs: 200`, non-empty `SourceCode` and `ABI`, `Proxy: 0`.
+
+### 19.9 Post-deployment interactions
+
+Run against the live deployed contract with `scripts/interact-demo.ts`:
+
+```shell
+npx hardhat run scripts/interact-demo.ts --network sepolia --build-profile production
+```
+
+The script reads the deployed address from `ignition/deployments/chain-11155111/deployed_addresses.json`
+automatically, then walks through the full permission-respecting lifecycle using **clearly
+synthetic demo values** (no real personal information):
+
+- `credentialId` derived from the literal label `"CRED-DEMO-001"`
+- `credentialHash` derived from the literal placeholder `"DEMO-CERTIFICATE-DOCUMENT-PLACEHOLDER"`
+- `holderHash` derived from the literal placeholder `"DEMO-HOLDER-REFERENCE-PLACEHOLDER"`
+
+| # | Action | Transaction | Block | Gas used |
+| --- | --- | --- | --- | --- |
+| 1 | Read `owner()` | *(read-only, no tx)* | — | — |
+| 2 | `addIssuer` (deployer authorises itself as the demo issuer, since only one funded account is available) | [`0x0780444e...9f6b7`](https://sepolia.etherscan.io/tx/0x0780444e5f27369d8f8d773f091093c13fe7f042f3edbbc5d92c77125a49f6b7) | `11793183` | `47863` |
+| 3 | `registerCredential` | [`0x8516c427...4de521`](https://sepolia.etherscan.io/tx/0x8516c42746ceddf28b23ba709d9fbb7e5071b319fc292dede368acba524de521) | `11793184` | `118907` |
+| 4 | `verifyCredential` / `getCredential` | *(read-only, no tx)* — returned `isValid=true`, `status=Active` | — | — |
+| 5 | `revokeCredential` | [`0xda7ac510...2b8ce`](https://sepolia.etherscan.io/tx/0xda7ac5102c41afa05f0062b1962bec9af1608835f2a91703fdf402c8a7d2b8ce) | `11793185` | `33536` |
+| 6 | `verifyCredential` / `getCredential` (post-revocation) | *(read-only, no tx)* — returned `isValid=false`, `status=Revoked` | — | — |
+
+`credentialId` used in these transactions:
+`0x57580d15e7756ded5690cd21b3862f0092dd8d6bf680041cc562d7e472ce78f7`
+
+### 19.10 Security warnings
+
+- The `.env` file used for this deployment is **not** committed (verified with
+  `git check-ignore -v .env` and `git status --porcelain`, both confirming it is ignored and
+  untracked). Only `.env.example` (placeholders, no real values) is in the repository.
+- No private key, API key, or wallet secret appears anywhere in this README, in any committed
+  file, or in any command shown above — every command references credentials only through
+  `configVariable(...)` / `process.env`, never a literal value.
+- The Sepolia wallet used here holds only Sepolia test ETH and should never be reused for
+  mainnet funds.
+
+### 19.11 Troubleshooting encountered
+
+**Issue**: the first verification attempt failed with
+`HHE80009: The address contains a contract whose bytecode does not match any of your local contracts.`
+on all three explorers (Etherscan, Blockscout, Sourcify).
+
+**Cause**: between deploying (with `--build-profile production`) and verifying, a read-only
+diagnostic script was run via `npx hardhat run ... --network sepolia` **without**
+`--build-profile production`. `hardhat run` silently recompiles the project first, and
+(per `hardhat-verify`'s own documented behaviour) defaults to the `default` build profile —
+which has the optimizer disabled. That overwrote the local `artifacts/` cache with unoptimized
+bytecode that no longer matched what was actually deployed on-chain.
+
+**Resolution**: re-ran `npx hardhat build --build-profile production` immediately before
+verifying, confirmed the rebuilt artifact's bytecode now matched the deployed contract's
+creation code byte-for-byte, then re-ran the verify command — all three explorers succeeded on
+the next attempt. Lesson captured in the warning in §19.5: always pass `--build-profile
+production` explicitly on every command touching this project between a production deployment
+and its verification.
+
+### 19.12 Deployment readiness checklist
+
+- [x] Contract compiles cleanly with the `production` profile (optimizer on, 200 runs)
+- [x] 39/39 tests passing, typecheck clean, immediately before deployment
+- [x] `.env` confirmed untracked and gitignored; no secrets in any tracked file
+- [x] Deployed to Sepolia via Hardhat Ignition, transaction confirmed (19+ confirmations checked)
+- [x] Verified on Etherscan, Blockscout, and Sourcify; independently re-checked via the
+      Etherscan API
+- [x] Full lifecycle (issuer authorisation, issuance, verification, revocation,
+      post-revocation verification) exercised against the live deployed contract with real,
+      recorded transaction hashes
+- [x] Deployment records committed (`ignition/deployments/chain-11155111/`) for reproducibility
